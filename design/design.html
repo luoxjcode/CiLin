@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>语林 · 高保真原型</title>
+  <title>辞林 · 高保真原型</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
@@ -17,18 +17,31 @@
     .serif { font-family: 'Noto Serif SC', serif; }
     .paper-bg { background-color: #fdf8f0; background-image: radial-gradient(#e5e7eb 0.5px, transparent 0.5px); background-size: 10px 10px; }
     [x-cloak] { display: none !important; }
+    
+    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
   </style>
 </head>
 <body x-data="{ 
     tab: 'home', 
     showDetail: false, 
+    isLoggedIn: false,
+    emailInput: '',
+    // 分类级联状态
+    catLevel: 0, 
+    catPath: [],
+    // 用户返回数据结构
+    user: {
+        id: '2042194267056115714',
+        name: '203049421@qq.com',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150'
+    },
     quizStatus: 'idle', 
     ansIdx: null,
     searchQuery: '',
     words: ['醍醐灌顶', '春风化雨', '厚积薄发', '举一反三']
 }">
 
-  <!-- 模拟手机外壳 -->
   <div class="iphone-frame">
     <!-- 状态栏 -->
     <div class="status-bar text-gray-800">
@@ -43,34 +56,26 @@
     <!-- 主交互区域 -->
     <div class="content-area paper-bg">
 
-      <!-- 1. 首页 (每日一练) -->
+      <!-- 1. 首页 (保持不变) -->
       <template x-if="tab === 'home'">
-        <div class="p-6 h-full flex flex-col items-center justify-center animate-fade-in">
-          <div class="w-full text-center mb-8">
-            <h1 class="serif text-2xl text-slate-800 font-bold">语林</h1>
+        <div class="p-6 h-full flex flex-col items-center justify-center animate-fade-in text-center">
+          <div class="mb-8">
+            <h1 class="serif text-2xl text-slate-800 font-bold">辞林</h1>
             <p class="text-xs text-slate-500 mt-1 uppercase tracking-widest">Daily Wisdom</p>
           </div>
-          
-          <!-- 答题卡片 -->
-          <div class="w-full bg-white rounded-3xl p-6 shadow-xl border border-orange-100 relative">
+          <div class="w-full bg-white rounded-3xl p-6 shadow-xl border border-orange-100 relative text-left">
             <div class="text-xs text-orange-400 font-bold mb-4">今日练习 03/10</div>
             <h2 class="serif text-4xl text-slate-800 mb-2 leading-tight">醍醐灌顶</h2>
             <p class="text-slate-400 italic mb-8">tí hú guàn dǐng</p>
-            
             <div class="space-y-3">
               <template x-for="(opt, index) in ['比喻受到很大启发', '形容天气严寒', '形容人很愚钝']">
-                <button 
-                  @click="quizStatus = index === 0 ? 'correct' : 'wrong'; ansIdx = index"
-                  :class="{'border-green-500 bg-green-50': quizStatus==='correct' && ansIdx===index, 
-                           'border-red-500 bg-red-50': quizStatus==='wrong' && ansIdx===index,
-                           'border-slate-100 hover:border-orange-300': ansIdx !== index}"
+                <button @click="quizStatus = index === 0 ? 'correct' : 'wrong'; ansIdx = index"
+                  :class="{'border-green-500 bg-green-50': quizStatus==='correct' && ansIdx===index, 'border-red-500 bg-red-50': quizStatus==='wrong' && ansIdx===index, 'border-slate-100': ansIdx !== index}"
                   class="w-full p-4 text-left border-2 rounded-2xl transition-all duration-200">
                   <span class="text-slate-700 font-medium" x-text="opt"></span>
                 </button>
               </template>
             </div>
-
-            <!-- 反馈提示 -->
             <div x-show="quizStatus !== 'idle'" class="mt-4 text-center animate-bounce">
                 <span x-show="quizStatus === 'correct'" class="text-green-600 font-bold"><i class="fas fa-check-circle mr-2"></i>太棒了！理解正确</span>
                 <span x-show="quizStatus === 'wrong'" class="text-red-500 font-bold"><i class="fas fa-times-circle mr-2"></i>再想想？</span>
@@ -79,55 +84,95 @@
         </div>
       </template>
 
-      <!-- 2. 分类页 -->
+      <!-- 2. 分类页 (三级分类优化) -->
       <template x-if="tab === 'categories'">
-        <div class="p-6 animate-fade-in">
-            <h2 class="serif text-2xl mb-6">词语分类</h2>
-            <div class="grid grid-cols-2 gap-4">
-                <div @click="tab = 'search'" class="bg-blue-50 p-5 rounded-3xl border border-blue-100 cursor-pointer">
-                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 mb-3 shadow-sm">
-                        <i class="fas fa-mountain"></i>
-                    </div>
+        <div class="p-6 animate-fade-in relative">
+            <!-- 路径导航 (面包屑) -->
+            <div class="flex items-center mb-6 text-xs text-slate-400 overflow-x-auto whitespace-nowrap pb-2" x-show="catLevel > 0">
+                <button @click="catLevel = 0; catPath = []" class="hover:text-orange-500">全部分类</button>
+                <template x-for="(p, index) in catPath">
+                    <span class="flex items-center">
+                        <i class="fas fa-chevron-right text-[8px] mx-2 opacity-50"></i>
+                        <button @click="catLevel = index + 1; catPath = catPath.slice(0, index + 1)" 
+                                :class="index === catPath.length - 1 ? 'text-slate-800 font-bold' : ''"
+                                x-text="p"></button>
+                    </span>
+                </template>
+            </div>
+
+            <h2 class="serif text-2xl mb-6" x-text="catLevel === 0 ? '词语分类' : catPath[catPath.length-1]"></h2>
+
+            <!-- 一级分类：大类网格 -->
+            <div x-show="catLevel === 0" class="grid grid-cols-2 gap-4 animate-fade-in">
+                <div @click="catLevel = 1; catPath = ['写景']" class="bg-blue-50 p-5 rounded-3xl border border-blue-100 shadow-sm">
+                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 mb-3 shadow-sm"><i class="fas fa-mountain"></i></div>
                     <p class="font-bold text-slate-700">写景词</p>
-                    <p class="text-xs text-slate-400">120/450</p>
+                    <p class="text-[10px] text-slate-400 mt-1">春夏秋冬·山川湖海</p>
                 </div>
-                <div class="bg-orange-50 p-5 rounded-3xl border border-orange-100">
-                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-500 mb-3 shadow-sm">
-                        <i class="fas fa-heart"></i>
-                    </div>
+                <div @click="catLevel = 1; catPath = ['品德']" class="bg-orange-50 p-5 rounded-3xl border border-orange-100 shadow-sm">
+                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-orange-500 mb-3 shadow-sm"><i class="fas fa-heart"></i></div>
                     <p class="font-bold text-slate-700">品德词</p>
-                    <p class="text-xs text-slate-400">85/200</p>
+                    <p class="text-[10px] text-slate-400 mt-1">浩然正气·谦谦君子</p>
                 </div>
-                <div class="bg-green-50 p-5 rounded-3xl border border-green-100">
-                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-green-500 mb-3 shadow-sm">
-                        <i class="fas fa-brain"></i>
-                    </div>
+                <div @click="catLevel = 1; catPath = ['心理']" class="bg-green-50 p-5 rounded-3xl border border-green-100 shadow-sm">
+                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-green-500 mb-3 shadow-sm"><i class="fas fa-brain"></i></div>
                     <p class="font-bold text-slate-700">心理词</p>
-                    <p class="text-xs text-slate-400">42/150</p>
+                    <p class="text-[10px] text-slate-400 mt-1">喜怒哀乐·忐忑不安</p>
                 </div>
-                <div class="bg-purple-50 p-5 rounded-3xl border border-purple-100">
-                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-purple-500 mb-3 shadow-sm">
-                        <i class="fas fa-scroll"></i>
-                    </div>
+                <div @click="catLevel = 1; catPath = ['典故']" class="bg-purple-50 p-5 rounded-3xl border border-purple-100 shadow-sm">
+                    <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-purple-500 mb-3 shadow-sm"><i class="fas fa-scroll"></i></div>
                     <p class="font-bold text-slate-700">文学典故</p>
-                    <p class="text-xs text-slate-400">12/300</p>
+                    <p class="text-[10px] text-slate-400 mt-1">庄周梦蝶·守株待兔</p>
                 </div>
+            </div>
+
+            <!-- 二级分类：中类列表 -->
+            <div x-show="catLevel === 1" class="space-y-3 animate-fade-in">
+                <template x-for="item in ['季节', '地理', '天文', '气象']">
+                    <div @click="catLevel = 2; catPath.push(item)" class="bg-white p-5 rounded-2xl flex items-center justify-between border border-slate-100 shadow-sm cursor-pointer active:bg-slate-50">
+                        <span class="font-medium text-slate-700" x-text="item"></span>
+                        <div class="flex items-center text-slate-300">
+                            <span class="text-[10px] mr-2">12组主题</span>
+                            <i class="fas fa-chevron-right text-[10px]"></i>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 三级分类：小类网格 -->
+            <div x-show="catLevel === 2" class="grid grid-cols-2 gap-3 animate-fade-in">
+                <template x-for="item in ['春天', '夏天', '秋天', '冬天']">
+                    <div @click="catLevel = 3; catPath.push(item)" class="bg-white p-6 rounded-3xl text-center border-2 border-slate-50 shadow-sm active:border-orange-200">
+                        <p class="serif text-xl text-slate-800" x-text="item"></p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 最终词语列表 -->
+            <div x-show="catLevel === 3" class="space-y-2 animate-fade-in">
+                <template x-for="word in ['初春', '阳春', '暮春', '春暖花开', '春色满园']">
+                    <div @click="showDetail = true" class="bg-white/60 p-4 rounded-2xl flex items-center justify-between border border-white shadow-sm cursor-pointer">
+                        <div class="flex items-baseline">
+                            <span class="serif text-lg text-slate-800" x-text="word"></span>
+                            <span class="text-[10px] text-slate-400 ml-2 italic">示例词汇</span>
+                        </div>
+                        <i class="fas fa-chevron-right text-[10px] text-slate-200"></i>
+                    </div>
+                </template>
             </div>
         </div>
       </template>
 
-      <!-- 3. 搜索与详情 -->
+      <!-- 3. 搜索与详情 (详情页已恢复) -->
       <template x-if="tab === 'search'">
         <div class="p-6 animate-fade-in">
             <div class="relative mb-6">
                 <i class="fas fa-search absolute left-4 top-4 text-slate-400"></i>
                 <input x-model="searchQuery" type="text" placeholder="搜词语、释义、拼音..." class="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border-none shadow-sm focus:ring-2 focus:ring-orange-200">
             </div>
-
-            <!-- 搜索结果列表 -->
             <div class="space-y-3" x-show="!showDetail">
                 <template x-for="word in words.filter(w => w.includes(searchQuery))">
-                    <div @click="showDetail = true" class="bg-white p-4 rounded-2xl flex justify-between items-center cursor-pointer hover:bg-orange-50 transition-colors shadow-sm">
+                    <div @click="showDetail = true" class="bg-white p-4 rounded-2xl flex justify-between items-center cursor-pointer shadow-sm">
                         <div>
                             <span class="serif text-lg text-slate-700" x-text="word"></span>
                             <span class="ml-2 text-xs text-slate-400">tí hú guàn dǐng</span>
@@ -137,71 +182,94 @@
                 </template>
             </div>
 
-            <!-- 模拟详情页 (Overlay式) -->
-            <div x-show="showDetail" class="fixed inset-0 z-20 paper-bg p-6 pt-16" x-transition:enter="transition ease-out duration-300 transform translate-y-full" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0">
+            <!-- 词语详情页 Overlay (已恢复) -->
+            <div x-show="showDetail" class="fixed inset-0 z-20 paper-bg p-6 pt-16 flex flex-col" x-transition:enter="transition ease-out duration-300 transform translate-y-full" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0" x-transition:leave="transition ease-in duration-300 transform" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full">
                 <button @click="showDetail = false" class="absolute top-6 right-6 text-slate-400 text-xl"><i class="fas fa-times-circle"></i></button>
                 <h1 class="serif text-4xl mb-4 text-slate-800">醍醐灌顶</h1>
-                <div class="flex space-x-2 mb-6 text-xs italic text-slate-500 bg-white/50 p-3 rounded-xl border border-white">
-                    <span>tí hú guàn dǐng</span>
+                <div class="flex items-center space-x-3 mb-6 bg-white/50 p-3 rounded-xl border border-white w-fit">
+                    <span class="text-xs italic text-slate-500">tí hú guàn dǐng</span>
                     <i class="fas fa-volume-up text-orange-400"></i>
                 </div>
-                <div class="bg-white rounded-2xl p-5 mb-4 shadow-sm">
-                    <h4 class="font-bold text-sm text-orange-500 mb-2">【释义】</h4>
-                    <p class="text-slate-600 leading-relaxed text-sm">比喻听了高明的意见使人受到很大启发。也形容清凉。醍醐：酥酪上凝聚的油。</p>
+                <div class="space-y-4">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-orange-50">
+                        <h4 class="font-bold text-xs text-orange-500 mb-2 uppercase">【释义】</h4>
+                        <p class="text-slate-600 leading-relaxed text-sm">比喻听了高明的意见使人受到很大启发。醍醐：酥酪上凝聚的油。</p>
+                    </div>
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-green-50">
+                        <h4 class="font-bold text-xs text-green-500 mb-2 uppercase">【例句】</h4>
+                        <p class="serif text-slate-700 italic text-sm leading-relaxed">“听了王老师的话，我感到醍醐灌顶，一切困惑都迎刃而解了。”</p>
+                    </div>
                 </div>
-                <div class="bg-white rounded-2xl p-5 shadow-sm">
-                    <h4 class="font-bold text-sm text-green-500 mb-2">【例句】</h4>
-                    <p class="serif text-slate-700 italic text-sm">“听了王老师的话，我感到醍醐灌顶，一切困惑都迎刃而解了。”</p>
-                </div>
-                <button class="w-full mt-6 py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg">加入生词本</button>
+                <button class="w-full mt-auto mb-6 py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg">加入生词本</button>
             </div>
         </div>
       </template>
 
-      <!-- 4. 我的 (Profile) -->
+      <!-- 4. 我的 / 邮箱登录 -->
       <template x-if="tab === 'profile'">
-        <div class="p-6 animate-fade-in">
-            <div class="flex items-center mb-8">
-                <div class="w-16 h-16 bg-orange-200 rounded-2xl border-2 border-white shadow-md overflow-hidden mr-4">
-                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100" alt="">
+        <div class="h-full">
+            <!-- 未登录：邮箱登录 -->
+            <div x-show="!isLoggedIn" class="p-8 h-full flex flex-col justify-center animate-fade-in text-center">
+                <div class="mb-10">
+                    <div class="w-20 h-20 bg-orange-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-feather-alt text-3xl text-orange-500"></i>
+                    </div>
+                    <h2 class="serif text-3xl text-slate-800">欢迎归林</h2>
+                    <p class="text-slate-400 text-sm mt-2">邮箱登录以同步学习进度</p>
                 </div>
-                <div>
-                    <h3 class="font-bold text-slate-800">语林书生</h3>
-                    <p class="text-xs text-slate-400 italic">“学如逆水行舟”</p>
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-3 mb-6">
-                <div class="bg-white p-4 rounded-3xl text-center shadow-sm">
-                    <p class="text-2xl font-bold text-slate-800">12</p>
-                    <p class="text-xs text-slate-400">坚持天数</p>
-                </div>
-                <div class="bg-white p-4 rounded-3xl text-center shadow-sm">
-                    <p class="text-2xl font-bold text-slate-800">356</p>
-                    <p class="text-xs text-slate-400">累计词汇</p>
+                <div class="space-y-4 text-left">
+                    <div class="relative">
+                        <i class="fas fa-envelope absolute left-4 top-4 text-slate-300"></i>
+                        <input x-model="emailInput" type="email" placeholder="请输入您的电子邮箱" class="w-full pl-12 pr-4 py-4 rounded-2xl bg-white border-none shadow-sm outline-none">
+                    </div>
+                    <button @click="if(emailInput) { isLoggedIn = true; user.name = emailInput; }" class="w-full py-4 bg-slate-800 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-transform">立即登录</button>
                 </div>
             </div>
 
-            <div class="bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-50">
-                <div class="p-4 border-b border-slate-50 flex items-center">
-                    <i class="fas fa-bookmark w-8 text-orange-400"></i>
-                    <span class="text-sm font-medium">收藏的词句</span>
-                    <i class="fas fa-chevron-right ml-auto text-xs text-slate-300"></i>
+            <!-- 已登录：个人页资料卡片 (优化版) -->
+            <div x-show="isLoggedIn" class="p-6 animate-fade-in">
+                <!-- 顶部精华资料卡片 -->
+                <div class="bg-white rounded-[2.5rem] p-6 shadow-xl shadow-orange-900/5 relative overflow-hidden border border-white mb-6">
+                    <div class="absolute -right-4 -top-4 w-24 h-24 bg-orange-50 rounded-full opacity-40"></div>
+                    <div class="flex items-center space-x-4 relative z-10">
+                        <div class="w-20 h-20 rounded-2xl border-4 border-orange-50 shadow-sm overflow-hidden bg-slate-100">
+                            <img :src="user.avatar" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="serif text-xl text-slate-800 font-bold truncate" x-text="user.name"></h3>
+                            <p class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest flex items-center">
+                                <span class="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse"></span>
+                                Online Student
+                            </p>
+                        </div>
+                    </div>
+                    <div class="mt-6 pt-6 border-t border-slate-50 flex justify-between items-center px-2">
+                        <div class="text-center">
+                            <p class="text-xl font-bold text-slate-800">12</p>
+                            <p class="text-[10px] text-slate-400">坚持天数</p>
+                        </div>
+                        <div class="w-px h-8 bg-slate-100"></div>
+                        <div class="text-center text-slate-300">
+                            <i class="fas fa-medal text-lg mb-1"></i>
+                            <p class="text-[10px]">语林成就</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="p-4 border-b border-slate-50 flex items-center">
-                    <i class="fas fa-history w-8 text-blue-400"></i>
-                    <span class="text-sm font-medium">练习历史</span>
-                    <i class="fas fa-chevron-right ml-auto text-xs text-slate-300"></i>
+
+                <div class="bg-white rounded-3xl overflow-hidden shadow-sm border border-slate-50">
+                    <div class="p-4 border-b border-slate-50 flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center"><i class="fas fa-bookmark w-8 text-orange-400"></i><span class="text-sm font-medium text-slate-700">我的收藏</span></div>
+                        <i class="fas fa-chevron-right text-[10px] text-slate-300"></i>
+                    </div>
+                    <div class="p-4 flex items-center justify-between cursor-pointer">
+                        <div class="flex items-center"><i class="fas fa-history w-8 text-blue-400"></i><span class="text-sm font-medium text-slate-700">练习记录</span></div>
+                        <i class="fas fa-chevron-right text-[10px] text-slate-300"></i>
+                    </div>
                 </div>
-                <div class="p-4 flex items-center">
-                    <i class="fas fa-medal w-8 text-yellow-400"></i>
-                    <span class="text-sm font-medium">我的成就</span>
-                    <i class="fas fa-chevron-right ml-auto text-xs text-slate-300"></i>
-                </div>
+                <button @click="isLoggedIn = false" class="w-full mt-8 text-red-300 text-[10px] font-bold tracking-widest">退出账号</button>
             </div>
         </div>
       </template>
-
     </div>
 
     <!-- 底部 TabBar -->
@@ -210,7 +278,7 @@
         <i class="fas fa-home text-xl"></i>
         <span class="text-[10px] mt-1 font-bold">每日</span>
       </button>
-      <button @click="tab = 'categories'; showDetail = false" :class="tab === 'categories' ? 'text-orange-500' : 'text-slate-300'" class="flex flex-col items-center flex-1">
+      <button @click="tab = 'categories'; showDetail = false; catLevel = 0; catPath = []" :class="tab === 'categories' ? 'text-orange-500' : 'text-slate-300'" class="flex flex-col items-center flex-1">
         <i class="fas fa-th-large text-xl"></i>
         <span class="text-[10px] mt-1 font-bold">分类</span>
       </button>
@@ -220,14 +288,9 @@
       </button>
       <button @click="tab = 'profile'; showDetail = false" :class="tab === 'profile' ? 'text-orange-500' : 'text-slate-300'" class="flex flex-col items-center flex-1">
         <i class="fas fa-user-circle text-xl"></i>
-        <span class="text-[10px] mt-1 font-bold">我的</span>
+        <span class="text-[10px] mt-1 font-bold" x-text="isLoggedIn ? '我的' : '未登录'"></span>
       </button>
     </nav>
   </div>
-
-  <style>
-    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fade-in 0.4s ease-out forwards; }
-  </style>
 </body>
 </html>

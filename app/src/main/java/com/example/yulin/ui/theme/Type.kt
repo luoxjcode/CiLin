@@ -2,19 +2,25 @@ package com.example.yulin.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.yulin.R
+
+val SerifFont = FontFamily(
+    Font(R.font.fs, FontWeight.Bold)
+)
 
 // Set of Material typography styles to start with
 val Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SerifFont,
         fontWeight = FontWeight.Bold,
         fontSize = 36.sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SerifFont,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp
     ),
@@ -26,7 +32,7 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = SerifFont,
         fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
         lineHeight = 28.sp,

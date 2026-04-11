@@ -20,84 +20,98 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import com.example.yulin.network.models.DictWordDetail
+import com.example.yulin.network.models.DictWordItem
 import com.example.yulin.ui.theme.*
-
-data class Word(val name: String, val pinyin: String, val meaning: String, val example: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(modifier: Modifier = Modifier) {
-    var searchQuery by remember { mutableStateOf("") }
-    var showDetail by remember { mutableStateOf(false) }
-    var selectedWord by remember { mutableStateOf<Word?>(null) }
-
-    val allWords = listOf(
-        Word("醍醐灌顶", "tí hú guàn dǐng", "比喻听了高明的意见使人受到很大启发。也形容清凉。醍醐：酥酪上凝聚的油。", "“听了王老师的话，我感到醍醐灌顶，一切困惑都迎刃而解了。”"),
-        Word("春风化雨", "chūn fēng huà yǔ", "指适宜于草木生长的风雨。后用以比喻良好的教育。", "“王老师对学生的教育，犹如春风化雨，滋润着每一个学生的心田。”"),
-        Word("厚积薄发", "hòu jī bó fā", "形容只有准备充分，才能办好事情。", "“他多年潜心钻研，终于在这次比赛中厚积薄发，一举夺魁。”"),
-        Word("举一反三", "jǔ yī fǎn sān", "指从一件事情类推而知道其他许多事情。", "“我们要学会举一反三，这样才能提高学习效率。”")
-    )
-
-    val filteredWords = allWords.filter { it.name.contains(searchQuery) }
+fun SearchScreen(
+    modifier: Modifier = Modifier,
+    viewModel: SearchViewModel
+) {
+    val uiState by viewModel.uiState.collectAsState()
 
     Box(modifier = modifier.fillMaxSize().background(PaperBg)) {
         Column(modifier = Modifier.padding(24.dp)) {
             // Search Bar
             OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.searchWords(it) },
                 placeholder = { Text("搜词语、释义、拼音...", color = Gray400, fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Gray400) },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.searchWords("") }) {
+                            Icon(Icons.Filled.Cancel, contentDescription = "Clear", tint = Gray400)
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp),
+                    .padding(bottom = 24.dp)
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp), spotColor = Color.Black.copy(alpha = 0.05f)),
                 shape = RoundedCornerShape(20.dp),
                 colors = TextFieldDefaults.outlinedTextFieldColors(
                     containerColor = Color.White,
                     unfocusedBorderColor = Color.Transparent,
                     focusedBorderColor = OrangePrimary.copy(alpha = 0.2f),
                     cursorColor = OrangePrimary
-                )
+                ),
+                singleLine = true
             )
 
-            // Results List
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(filteredWords) { word ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                selectedWord = word
-                                showDetail = true
-                            },
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(20.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+            if (uiState.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = OrangePrimary)
+                }
+            } else {
+                // Results List
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(uiState.searchResults) { word ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.fetchWordDetail(word.id)
+                                },
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(20.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = word.name,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = SlatePrimary
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = word.pinyin,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Gray400
-                                )
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = word.word,
+                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+                                        color = Slate700
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = word.pinyin ?: "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Gray400
+                                    )
+                                }
+                                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFFE2E8F0), modifier = Modifier.size(16.dp))
                             }
-                            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -106,20 +120,31 @@ fun SearchScreen(modifier: Modifier = Modifier) {
 
         // Detail Overlay
         AnimatedVisibility(
-            visible = showDetail,
+            visible = uiState.showDetail,
             enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)) + fadeIn(),
             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            selectedWord?.let { word ->
-                DetailView(word = word, onDismiss = { showDetail = false })
+            uiState.selectedWordDetail?.let { detail ->
+                DetailView(detail = detail, onDismiss = { viewModel.dismissDetail() })
+            }
+        }
+
+        if (uiState.isDetailLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = OrangePrimary)
             }
         }
     }
 }
 
 @Composable
-fun DetailView(word: Word, onDismiss: () -> Unit) {
+fun DetailView(detail: DictWordDetail, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -133,9 +158,8 @@ fun DetailView(word: Word, onDismiss: () -> Unit) {
                 .padding(top = 40.dp)
         ) {
             Text(
-                text = word.name,
-                style = MaterialTheme.typography.displayLarge,
-                fontSize = 40.sp, // Slightly larger than default displayLarge
+                text = detail.word,
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = 40.sp),
                 color = SlatePrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -148,53 +172,106 @@ fun DetailView(word: Word, onDismiss: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = word.pinyin,
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = detail.pinyin ?: "",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp),
                     fontStyle = FontStyle.Italic,
                     color = Gray500
                 )
                 Spacer(Modifier.width(8.dp))
-                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = OrangePrimary, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.VolumeUp, contentDescription = null, tint = OrangePrimary.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(32.dp))
 
             // Meaning Card
             Card(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                border = androidx.compose.foundation.BorderStroke(1.dp, Orange50),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text("【释义】", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = OrangePrimary, modifier = Modifier.padding(bottom = 8.dp))
-                    Text(word.meaning, style = MaterialTheme.typography.bodyLarge, color = Gray800, lineHeight = 22.sp)
+                    Text("【释义】", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = OrangePrimary), modifier = Modifier.padding(bottom = 8.dp))
+                    Text(detail.explanation ?: "暂无释义", style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp, lineHeight = 22.sp), color = Gray500)
+                }
+            }
+
+            // Derivation Card (if exists)
+            detail.derivation?.let { derivation ->
+                if (derivation.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("【出处】", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Slate700), modifier = Modifier.padding(bottom = 8.dp))
+                            Text(derivation, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.sp, lineHeight = 22.sp), color = Gray500)
+                        }
+                    }
                 }
             }
 
             // Example Card
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("【例句】", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = Green600, modifier = Modifier.padding(bottom = 8.dp))
-                    Text(word.example, style = MaterialTheme.typography.bodyLarge, color = SlatePrimary, fontStyle = FontStyle.Italic, lineHeight = 22.sp)
+            detail.exampleList?.let { examples ->
+                if (examples.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Green50),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("【例句】", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Green600), modifier = Modifier.padding(bottom = 8.dp))
+                            
+                            examples.forEachIndexed { index, example ->
+                                val formattedExample = buildAnnotatedString {
+                                    append("${index + 1}. ")
+                                    // 兼容中英文波浪号
+                                    val originalText = example.content.replace("~", detail.word).replace("～", detail.word)
+                                    val word = detail.word
+                                    
+                                    var startIndex = 0
+                                    while (startIndex < originalText.length) {
+                                        val wordIndex = originalText.indexOf(word, startIndex)
+                                        if (wordIndex == -1) {
+                                            append(originalText.substring(startIndex))
+                                            break
+                                        } else {
+                                            append(originalText.substring(startIndex, wordIndex))
+                                            withStyle(style = SpanStyle(color = Red500, fontWeight = FontWeight.Bold)) {
+                                                append(word)
+                                            }
+                                            startIndex = wordIndex + word.length
+                                        }
+                                    }
+                                }
+                                
+                                Text(
+                                    text = formattedExample,
+                                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = SerifFont, fontStyle = FontStyle.Italic, fontSize = 14.sp, lineHeight = 22.sp),
+                                    color = Slate700,
+                                    modifier = Modifier.padding(bottom = if (index < examples.size - 1) 8.dp else 0.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
             Button(
                 onClick = { /* Add to bookmarks */ },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier.fillMaxWidth().height(56.dp).shadow(elevation = 8.dp, shape = RoundedCornerShape(20.dp), spotColor = SlatePrimary.copy(alpha = 0.3f)),
                 colors = ButtonDefaults.buttonColors(containerColor = SlatePrimary),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Text("加入生词本", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             }
             
-            // Add extra space at the bottom to ensure the button is fully visible above nav bar if needed
             Spacer(Modifier.height(40.dp))
         }
 
@@ -206,7 +283,7 @@ fun DetailView(word: Word, onDismiss: () -> Unit) {
                 .padding(24.dp)
                 .padding(top = 16.dp)
         ) {
-            Icon(Icons.Default.Cancel, contentDescription = "Close", tint = Gray400, modifier = Modifier.size(24.dp))
+            Icon(Icons.Default.Cancel, contentDescription = "Close", tint = Color(0xFFE2E8F0), modifier = Modifier.size(24.dp))
         }
     }
 }

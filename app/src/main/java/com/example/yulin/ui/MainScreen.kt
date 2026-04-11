@@ -20,11 +20,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.yulin.ui.home.HomeScreen
 import com.example.yulin.ui.categories.CategoriesScreen
+import com.example.yulin.ui.categories.CategoriesViewModel
 import com.example.yulin.ui.search.SearchScreen
+import com.example.yulin.ui.search.SearchViewModel
 import com.example.yulin.ui.profile.ProfileScreen
 import com.example.yulin.ui.theme.OrangePrimary
 import com.example.yulin.ui.theme.SlatePrimary
@@ -37,7 +41,10 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(
+    categoriesViewModel: CategoriesViewModel = viewModel(),
+    searchViewModel: SearchViewModel = viewModel()
+) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
 
     Scaffold(
@@ -55,14 +62,20 @@ fun MainScreen() {
                 items.forEach { screen ->
                     NavigationBarItem(
                         icon = { Icon(screen.icon, contentDescription = screen.label) },
-                        label = { Text(screen.label, fontSize = 10.sp) },
+                        label = { Text(screen.label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                         selected = currentScreen == screen,
-                        onClick = { currentScreen = screen },
+                        onClick = { 
+                            if (currentScreen == screen && screen is Screen.Categories) {
+                                // Double tap on Categories tab: reset and refresh
+                                categoriesViewModel.reset(refresh = true)
+                            }
+                            currentScreen = screen 
+                        },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = OrangePrimary,
                             selectedTextColor = OrangePrimary,
-                            unselectedIconColor = Color.LightGray,
-                            unselectedTextColor = Color.LightGray,
+                            unselectedIconColor = Color(0xFFCBD5E1),
+                            unselectedTextColor = Color(0xFFCBD5E1),
                             indicatorColor = Color.Transparent
                         )
                     )
@@ -73,8 +86,8 @@ fun MainScreen() {
         val modifier = Modifier.padding(innerPadding)
         when (currentScreen) {
             Screen.Home -> HomeScreen(modifier)
-            Screen.Categories -> CategoriesScreen(modifier)
-            Screen.Search -> SearchScreen(modifier)
+            Screen.Categories -> CategoriesScreen(modifier, categoriesViewModel)
+            Screen.Search -> SearchScreen(modifier, searchViewModel)
             Screen.Profile -> ProfileScreen(modifier)
         }
     }
