@@ -53,7 +53,7 @@
 ```text
 .
 ├── app/
-│   └── src/main/java/com/example/yulin/
+│   └── src/main/java/com/example/cilin/
 │       ├── network/        # API 定义、模型 (Models) 及网络配置
 │       ├── ui/             # UI 界面 (Home, Search, Categories, Profile)
 │       ├── utils/          # 工具类 (Toast 等)

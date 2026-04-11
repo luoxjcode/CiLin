@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.yulin"
+    namespace = "com.example.cilin"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.yulin"
+        applicationId = "com.example.cilin"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
