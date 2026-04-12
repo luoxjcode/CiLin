@@ -10,6 +10,15 @@
   <img src="image/effect.png" width="80%" alt="CiLin App Effect"/>
 </div>
 
+***
+
+## 📺 项目地址
+
+代码地址：https://github.com/luoxjcode/CiLin
+
+视频地址：https://www.bilibili.com/video/BV11dDXBpEdJ/
+
+文章地址：https://juejin.cn/post/7627400127373393966
 
 ***
 
